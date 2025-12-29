@@ -253,20 +253,20 @@ entry_output = ttk.Entry(app, width=50)
 entry_output.grid(row=1, column=1)
 ttk.Button(app, text="Save As", command=select_output).grid(row=1, column=2)
 
-ttk.Label(app, text="Start Time:").grid(row=2, column=0, sticky="e")
+ttk.Label(app, text="Start Time: (e.g. 2m10s, 2m)").grid(row=2, column=0, sticky="e")
 entry_start = ttk.Entry(app)
 entry_start.grid(row=2, column=1)
 
 ttk.Checkbutton(
-    app, text="Specify End Time",
+    app, text="Specify End Time:",
     variable=end_time_var, command=toggle_end_time
 ).grid(row=3, column=0, sticky="w")
 
-ttk.Label(app, text="End Time:").grid(row=4, column=0, sticky="e")
+ttk.Label(app, text="End Time: (e.g. 6m13s, 6m)").grid(row=4, column=0, sticky="e")
 entry_end = ttk.Entry(app, state="disabled")
 entry_end.grid(row=4, column=1)
 
-ttk.Label(app, text="Duration:").grid(row=5, column=0, sticky="e")
+ttk.Label(app, text="Duration: (e.g. 5m10s, 5m)").grid(row=5, column=0, sticky="e")
 entry_duration = ttk.Entry(app)
 entry_duration.grid(row=5, column=1)
 
