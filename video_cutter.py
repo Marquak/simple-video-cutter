@@ -5,13 +5,13 @@ import threading
 import re
 import json
 import os
-import platform
 
 CONFIG_FILE = "cutter.cfg"
 
 # ---------------- CONFIG ---------------- #
 
 def load_settings():
+    """Load saved settings from the configuration file."""
     if not os.path.exists(CONFIG_FILE):
         return {}
     try:
@@ -22,6 +22,7 @@ def load_settings():
         return {}
 
 def save_settings_file(settings):
+    """Save settings to the configuration file."""
     try:
         with open(CONFIG_FILE, "w") as f:
             json.dump(settings, f, indent=2)
@@ -31,11 +32,10 @@ def save_settings_file(settings):
 # ---------------- TIME PARSING ---------------- #
 
 def parse_time_to_seconds(time_str):
+    """Convert a user-provided time string to total seconds."""
     time_str = time_str.strip()
     if not time_str:
         return None
-
-    # hh:mm:ss or mm:ss
     if ":" in time_str:
         parts = time_str.split(":")
         if not all(p.isdigit() for p in parts):
@@ -49,21 +49,17 @@ def parse_time_to_seconds(time_str):
         else:
             return None
         return h * 3600 + m * 60 + s
-
-    # XmYs format
     match = re.fullmatch(r"(?:(\d+)m)?(?:(\d+)s)?", time_str)
     if match:
         m, s = match.groups()
         total = (int(m) * 60 if m else 0) + (int(s) if s else 0)
         return total if total > 0 else None
-
-    # Raw seconds
     if time_str.isdigit():
         return int(time_str)
-
     return None
 
 def seconds_to_ffmpeg_time(seconds):
+    """Convert seconds to FFmpeg-compatible time format (hh:mm:ss)."""
     h = seconds // 3600
     m = (seconds % 3600) // 60
     s = seconds % 60
@@ -71,30 +67,39 @@ def seconds_to_ffmpeg_time(seconds):
 
 # ---------------- FILE PICKERS ---------------- #
 
-def detect_supported_formats():
-    try:
-        result = subprocess.run(["ffmpeg", "-formats"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=True)
-        output = result.stdout
-        formats = re.findall(r"(?<=\s)(\w+)(?=\s+DE\s+)", output)  # Find formats with "DE" flag (decode + encode)
-        return [(f"{fmt.upper()} files", f"*.{fmt}") for fmt in formats]
-    except Exception as e:
-        print("Error detecting formats:", e)
-        return [("All files", "*.*")]
+def supported_video_patterns():
+    """Provide a list of patterns for common video file types."""
+    formats = ["mp4", "mkv", "avi", "webm", "mov", "flv", "wmv", "m4v"]
+    patterns = []
+    for fmt in formats:
+        patterns.append(f"*.{fmt.lower()}")
+        patterns.append(f"*.{fmt.upper()}")
+    return patterns
 
 def select_input():
+    """Open file dialog to select input video file."""
+    supported_formats = supported_video_patterns()
     filename = filedialog.askopenfilename(
         title="Select Video File",
-        filetypes=file_types  # Dynamically determined file types
+        filetypes=[
+            ("All Supported Video File Types", tuple(supported_formats)),
+            ("All Files", "*.*")
+        ]
     )
     if filename:
         entry_input.delete(0, tk.END)
         entry_input.insert(0, filename)
 
 def select_output():
+    """Open file dialog to select where to save the output video."""
+    supported_formats = supported_video_patterns()
     filename = filedialog.asksaveasfilename(
         title="Save Clip As",
         defaultextension=".mp4",
-        filetypes=file_types  # Dynamically determined file types
+        filetypes=[
+            ("All Supported Video File Types", tuple(supported_formats)),
+            ("All Files", "*.*")
+        ]
     )
     if filename:
         entry_output.delete(0, tk.END)
@@ -103,36 +108,36 @@ def select_output():
 # ---------------- FFMPEG ---------------- #
 
 def update_progress(progress):
-    progress_label.config(text=f"{progress}%")
+    """Update the progress label to indicate completion percentage."""
+    progress_label.config(text=f"{progress}%", anchor="w")
+    app.update_idletasks()
 
 def run_ffmpeg(cmd):
+    """Run FFmpeg command to process video cutting."""
     try:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-        # Update progress bar (basic implementation)
-        for i in range(100):
-            progress_label.config(text=f"{i + 1}%")
-            app.update_idletasks()
-
+        for i in range(1, 101, 10):  # Simulate a progress bar
+            update_progress(i)
+            app.after(100)
         process.wait()
         if process.returncode == 0:
-            app.after(0, lambda: messagebox.showinfo("Success", "Video clip saved successfully."))
+            messagebox.showinfo("Success", "Video clip saved successfully!")
             progress_label.config(text="Done")
         else:
-            error_msg = process.stderr.read().strip() or "ffmpeg failed."
-            app.after(0, lambda: messagebox.showerror("ffmpeg Error", error_msg))
+            error_msg = process.stderr.read().strip() or "FFmpeg processing failed."
+            messagebox.showerror("Error", error_msg)
             progress_label.config(text="Error")
-
     except Exception as e:
-        print("Error running ffmpeg:", e)
+        print("Error running FFmpeg:", e)
         progress_label.config(text="Error")
 
 def cut_video():
+    """Validate entries and run the FFmpeg command to cut the video."""
     input_file = entry_input.get().strip()
     output_file = entry_output.get().strip()
 
     if not input_file or not output_file:
-        messagebox.showerror("Error", "Please select input and output files.")
+        messagebox.showerror("Error", "Please select both an input and output file.")
         return
 
     start_sec = parse_time_to_seconds(entry_start.get())
@@ -183,6 +188,7 @@ def cut_video():
 # ---------------- SETTINGS ---------------- #
 
 def save_settings_checkbox():
+    """Save settings to a configuration file."""
     if save_settings_var.get():
         settings = {
             "input": entry_input.get(),
@@ -199,6 +205,7 @@ def save_settings_checkbox():
             os.remove(CONFIG_FILE)
 
 def load_last_settings():
+    """Load previously saved settings."""
     settings = load_settings()
     if not settings.get("save"):
         return
@@ -215,6 +222,7 @@ def load_last_settings():
 # ---------------- UI LOGIC ---------------- #
 
 def toggle_end_time():
+    """Enable or disable duration/end time fields based on toggle."""
     if end_time_var.get():
         entry_end.config(state="normal")
         entry_duration.config(state="disabled")
@@ -227,7 +235,6 @@ def toggle_end_time():
 app = tk.Tk()
 app.title("Video Cutter (ffmpeg)")
 
-# ttk.Style Configuration File
 style = ttk.Style()
 style.theme_use("clam")
 
@@ -235,11 +242,48 @@ save_settings_var = tk.BooleanVar()
 end_time_var = tk.BooleanVar()
 accurate_var = tk.BooleanVar()
 
-file_types = detect_supported_formats()
+# Input Components
+ttk.Label(app, text="Input Video:").grid(row=0, column=0, sticky="e")
+entry_input = ttk.Entry(app, width=50)
+entry_input.grid(row=0, column=1)
+ttk.Button(app, text="Browse", command=select_input).grid(row=0, column=2)
+
+ttk.Label(app, text="Output File:").grid(row=1, column=0, sticky="e")
+entry_output = ttk.Entry(app, width=50)
+entry_output.grid(row=1, column=1)
+ttk.Button(app, text="Save As", command=select_output).grid(row=1, column=2)
+
+ttk.Label(app, text="Start Time:").grid(row=2, column=0, sticky="e")
+entry_start = ttk.Entry(app)
+entry_start.grid(row=2, column=1)
+
+ttk.Checkbutton(
+    app, text="Specify End Time",
+    variable=end_time_var, command=toggle_end_time
+).grid(row=3, column=0, sticky="w")
+
+ttk.Label(app, text="End Time:").grid(row=4, column=0, sticky="e")
+entry_end = ttk.Entry(app, state="disabled")
+entry_end.grid(row=4, column=1)
+
+ttk.Label(app, text="Duration:").grid(row=5, column=0, sticky="e")
+entry_duration = ttk.Entry(app)
+entry_duration.grid(row=5, column=1)
+
+ttk.Checkbutton(
+    app, text="Frame-accurate cut (re-encode)",
+    variable=accurate_var
+).grid(row=6, column=0, sticky="w")
+
+ttk.Checkbutton(
+    app, text="Save Settings",
+    variable=save_settings_var, command=save_settings_checkbox
+).grid(row=7, column=0, sticky="w")
+
+ttk.Button(app, text="Cut Video", command=cut_video).grid(row=8, column=0, columnspan=3, pady=10)
 
 progress_label = ttk.Label(app, text="")
-progress_label.grid(row=9, column=2, pady=5, sticky="w")
+progress_label.grid(row=9, column=2, pady=5, sticky="e")
 
-# Grid Layout
 load_last_settings()
 app.mainloop()
